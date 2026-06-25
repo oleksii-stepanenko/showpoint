@@ -1,0 +1,55 @@
+name: Build & Release
+
+# Build a .dmg on every tag (v1.0.0, …) and attach it to the GitHub Release.
+# You can also run it manually to get a downloadable build artifact.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Use the latest installed Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (Release, unsigned)
+        run: |
+          xcodebuild -project Showpoint.xcodeproj -scheme Showpoint \
+            -configuration Release -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Package .dmg
+        run: |
+          APP="build/Build/Products/Release/Showpoint.app"
+          STAGE="dist/dmg"
+          mkdir -p "$STAGE"
+          cp -R "$APP" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "Showpoint" -srcfolder "$STAGE" \
+            -ov -format UDZO dist/Showpoint.dmg
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Showpoint-dmg
+          path: dist/Showpoint.dmg
+
+      - name: Attach to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Showpoint.dmg
+          generate_release_notes: true

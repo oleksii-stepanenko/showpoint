@@ -1,0 +1,33 @@
+# ── macOS ──
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# ── Build output ──
+.build/
+DerivedData/
+build/
+*.xcarchive
+*.dmg
+
+# ── Generated Xcode project (recreated by `xcodegen generate`) ──
+*.xcodeproj/
+
+# ── Xcode user data ──
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+
+# ── Swift Package Manager ──
+.swiftpm/
+Package.resolved
+
+# ── Tooling / agent state (not part of the project) ──
+.omc/
+.claude/
+*.log
+
+# ── Misc ──
+*.swp
+*~

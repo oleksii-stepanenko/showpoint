@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Showpoint — Keystrokes, cursor highlight & screen annotation for macOS</title>
+  <meta name="description" content="A lightweight native macOS menu-bar app that shows your keystrokes, highlights the cursor, and lets you annotate the screen — for demos, tutorials and screen recordings." />
+  <link rel="icon" href="assets/logo.png" />
+  <meta property="og:title" content="Showpoint for macOS" />
+  <meta property="og:description" content="Keystrokes · Cursor highlight · Screen annotation." />
+  <meta property="og:image" content="assets/hero.png" />
+  <style>
+    :root { --teal:#30C758; --teal-d:#1f9a45; --ink:#0d1413; --bg:#0b0f0e; --card:#121817; --muted:#9aa6a2; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+           background: var(--bg); color: #eef2f0; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+    a { color: var(--teal); text-decoration: none; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+
+    header.hero { text-align: center; padding: 80px 24px 56px;
+      background: radial-gradient(900px 420px at 50% -10%, rgba(48,199,88,.22), transparent 70%); }
+    .hero img.logo { width: 104px; height: 104px; border-radius: 24px; box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+    .hero h1 { font-size: 56px; font-weight: 800; letter-spacing: -1px; margin: 22px 0 8px; }
+    .hero p.tag { font-size: 21px; color: #cdd6d2; }
+    .hero p.sub { font-size: 16px; color: var(--muted); margin-top: 8px; }
+
+    .cta { display: inline-flex; align-items: center; gap: 10px; margin-top: 30px;
+      background: linear-gradient(180deg, var(--teal), var(--teal-d)); color: #04140a; font-weight: 700;
+      padding: 15px 30px; border-radius: 14px; font-size: 18px; box-shadow: 0 10px 30px rgba(48,199,88,.35);
+      transition: transform .12s ease; }
+    .cta:hover { transform: translateY(-2px); }
+    .cta-note { display:block; color: var(--muted); font-size: 13px; margin-top: 12px; }
+
+    section { padding: 56px 0; border-top: 1px solid rgba(255,255,255,.06); }
+    .feature { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; margin: 36px 0; }
+    .feature:nth-child(even) .text { order: 2; }
+    .feature img { width: 100%; border-radius: 16px; background: var(--card);
+      border: 1px solid rgba(255,255,255,.07); box-shadow: 0 16px 40px rgba(0,0,0,.4); }
+    .feature h3 { font-size: 26px; margin-bottom: 10px; }
+    .feature p { color: #c4cdc9; }
+    h2.center { text-align: center; font-size: 32px; margin-bottom: 8px; }
+    .kbd { display:inline-block; background:#1c2422; border:1px solid rgba(255,255,255,.12); border-bottom-width:2px;
+      border-radius:6px; padding:1px 7px; font-size:13px; font-family: ui-monospace, monospace; color:#dfe7e4; }
+
+    footer { text-align: center; color: var(--muted); font-size: 14px; padding: 48px 24px 64px; border-top: 1px solid rgba(255,255,255,.06); }
+    @media (max-width: 720px) { .feature { grid-template-columns: 1fr; } .feature:nth-child(even) .text { order: 0; } .hero h1 { font-size: 42px; } }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <img class="logo" src="assets/logo.png" alt="Showpoint logo" />
+    <h1>Showpoint</h1>
+    <p class="tag">Keystrokes · Cursor highlight · Screen annotation</p>
+    <p class="sub">A lightweight macOS menu-bar tool for demos, tutorials &amp; screen recordings.</p>
+    <a class="cta" href="__REPO_URL__/releases/latest">⬇&nbsp; Download for macOS</a>
+    <span class="cta-note">macOS 14+ · Free · <a href="__REPO_URL__">View on GitHub</a></span>
+  </header>
+
+  <section class="wrap">
+    <div class="feature">
+      <div class="text">
+        <h3>⌨️ Show your keystrokes</h3>
+        <p>Every key and shortcut appears in clean on-screen capsules. Combos collapse into one,
+           bare modifier taps show on their own, and passwords are never captured.</p>
+      </div>
+      <img src="assets/keystrokes.png" alt="Keystroke overlay" />
+    </div>
+
+    <div class="feature">
+      <div class="text">
+        <h3>🔦 Highlight the cursor</h3>
+        <p>A smooth halo follows your pointer across every display and pulses on each click.
+           Pick a disc, ring, squircle or rhombus — your color, size and opacity.</p>
+      </div>
+      <img src="assets/cursor.png" alt="Cursor highlight" />
+    </div>
+
+    <div class="feature">
+      <div class="text">
+        <h3>✏️ Annotate the screen</h3>
+        <p>Draw with pen, highlighter, line, arrow, rectangle, ellipse, counter and spotlight.
+           Every object is editable — select, move, resize, recolor, undo or delete.</p>
+      </div>
+      <img src="assets/annotate.png" alt="Screen annotation" />
+    </div>
+  </section>
+
+  <section class="wrap" style="text-align:center;">
+    <h2 class="center">Hands-free</h2>
+    <p style="color:#c4cdc9; max-width:620px; margin:0 auto;">
+      Double-tap <span class="kbd">⌃ Control</span> to toggle the cursor highlight,
+      triple-tap it to start annotating. Each tool has a one-key shortcut while you draw.
+    </p>
+  </section>
+
+  <footer>
+    Built natively in Swift / SwiftUI by Oleksii Stepanenko · Free ·
+    <a href="__REPO_URL__">GitHub</a>
+  </footer>
+</body>
+</html>
