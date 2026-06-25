@@ -58,8 +58,15 @@ spotlight dims everything but the area you care about.
    permission (System Settings → Privacy & Security → Accessibility). Grant it once —
    Showpoint starts working automatically.
 
-> The download is currently **unsigned**. On first launch, right-click the app → **Open**,
-> or run `xattr -dr com.apple.quarantine /Applications/Showpoint.app`.
+> **"Showpoint is damaged and can't be opened"?** It isn't — the app just isn't
+> notarized yet (no paid Apple Developer ID), so macOS quarantines it. After moving it
+> to Applications, run this once:
+>
+> ```sh
+> xattr -dr com.apple.quarantine /Applications/Showpoint.app
+> ```
+>
+> Then open it normally. (This is standard for unsigned open-source Mac apps.)
 
 ---
 

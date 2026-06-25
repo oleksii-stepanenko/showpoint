@@ -25,11 +25,20 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build (Release, unsigned)
+      - name: Build (Release)
         run: |
           xcodebuild -project Showpoint.xcodeproj -scheme Showpoint \
             -configuration Release -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build
+
+      - name: Ad-hoc code-sign
+        # The linker leaves an incomplete signature that Gatekeeper flags as
+        # "damaged" on Apple Silicon. A proper ad-hoc signature fixes that so
+        # the app runs once the user clears quarantine (see README).
+        run: |
+          APP="build/Build/Products/Release/Showpoint.app"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
 
       - name: Package .dmg
         run: |
