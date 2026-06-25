@@ -15,15 +15,24 @@ final class AppEnvironment: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var permissionTimer: Timer?
 
-    /// Control taps drive hands-free toggles: double-tap → cursor highlight,
-    /// triple-tap → annotation. Lazy so `self` is initialized before capture.
+    /// Control taps drive hands-free toggles: double-tap → presentation overlays
+    /// (cursor highlight + keystrokes, together), triple-tap → annotation.
+    /// Lazy so `self` is initialized before capture.
     private lazy var controlTaps = MultiTapControlDetector { [weak self] count in
         guard let self else { return }
         switch count {
-        case 2: self.settings.cursorHighlightEnabled.toggle()
+        case 2: self.togglePresentationOverlays()
         case 3: self.settings.annotationEnabled.toggle()
         default: break
         }
+    }
+
+    /// Turns the cursor highlight and keystroke overlay on or off as a pair —
+    /// if either is on, both go off; otherwise both come on.
+    private func togglePresentationOverlays() {
+        let enable = !(settings.cursorHighlightEnabled || settings.keystrokesEnabled)
+        settings.cursorHighlightEnabled = enable
+        settings.keystrokesEnabled = enable
     }
 
     init() {

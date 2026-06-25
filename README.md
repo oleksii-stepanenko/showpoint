@@ -52,21 +52,25 @@ spotlight dims everything but the area you care about.
 
 ## 🚀 Install
 
-1. **[Download the latest `.dmg`](../../releases/latest)** and drag **Showpoint** to Applications.
-2. Open it — it appears in the **menu bar** (no Dock icon).
-3. The first time you show keystrokes or use a shortcut, macOS asks for **Accessibility**
-   permission (System Settings → Privacy & Security → Accessibility). Grant it once —
-   Showpoint starts working automatically.
+1. **[Download the latest `.dmg`](../../releases/latest)**, open it, and drag **Showpoint**
+   to your **Applications** folder.
 
-> **"Showpoint is damaged and can't be opened"?** It isn't — the app just isn't
-> notarized yet (no paid Apple Developer ID), so macOS quarantines it. After moving it
-> to Applications, run this once:
->
-> ```sh
-> xattr -dr com.apple.quarantine /Applications/Showpoint.app
-> ```
->
-> Then open it normally. (This is standard for unsigned open-source Mac apps.)
+2. **Run this command once** (required) — open **Terminal** and paste:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Showpoint.app
+   ```
+
+   > **Why?** Showpoint isn't notarized yet (that needs a paid Apple Developer ID), so
+   > macOS quarantines it and otherwise shows **"Showpoint is damaged and can't be
+   > opened."** It is **not** damaged — this command removes the quarantine flag and the
+   > app opens normally. (Standard for unsigned open-source Mac apps.)
+
+3. Open **Showpoint** from Applications — it lives in the **menu bar** (no Dock icon).
+
+4. The first time you show keystrokes or use a shortcut, macOS asks for **Accessibility**
+   permission (System Settings → Privacy & Security → Accessibility). Grant it once and
+   Showpoint starts working automatically.
 
 ---
 
@@ -76,7 +80,7 @@ Tap a chosen modifier key (default **⌃ Control**, configurable in Settings →
 
 | Gesture | Action |
 | --- | --- |
-| **Double-tap** the key | Toggle cursor highlight |
+| **Double-tap** the key | Toggle cursor highlight **+ keystrokes** together |
 | **Triple-tap** the key | Toggle annotation |
 
 ## 🎨 While annotating

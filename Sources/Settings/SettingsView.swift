@@ -59,7 +59,7 @@ private struct GeneralSettingsView: View {
                     ForEach(TapModifier.allCases) { Text("\($0.glyph) \($0.label)").tag($0) }
                 }
                 let m = settings.tapModifier
-                LabeledContent("Double-tap \(m.glyph) \(m.label)", value: "Toggle cursor highlight")
+                LabeledContent("Double-tap \(m.glyph) \(m.label)", value: "Cursor highlight + keystrokes")
                 LabeledContent("Triple-tap \(m.glyph) \(m.label)", value: "Toggle annotation")
             } header: {
                 Text("Hands-free shortcuts")
@@ -148,7 +148,7 @@ private struct CursorSettingsView: View {
             } header: {
                 Text("Highlight")
             } footer: {
-                Text("Tip: double-tap the \(settings.tapModifier.glyph) \(settings.tapModifier.label) key to toggle the highlight (requires Accessibility).")
+                Text("Tip: double-tap the \(settings.tapModifier.glyph) \(settings.tapModifier.label) key to toggle the highlight and keystrokes together (requires Accessibility).")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
