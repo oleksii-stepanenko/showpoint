@@ -88,7 +88,10 @@ jobs:
 
             IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/[0-9]+\)/ {print $2; exit}')"
             echo "Using identity: $IDENTITY"
-            codesign --force --deep --options runtime \
+            # No hardened runtime: the app isn't notarized and project.yml sets
+            # ENABLE_HARDENED_RUNTIME: NO. We only need a stable, cert-based
+            # designated requirement so the Accessibility grant survives updates.
+            codesign --force --deep \
               --sign "$IDENTITY" --keychain "$KEYCHAIN" "$APP"
 
             # The check that matters: the designated requirement must be tied to
