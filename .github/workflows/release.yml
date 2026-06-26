@@ -86,7 +86,14 @@ jobs:
             security set-key-partition-list -S apple-tool:,apple: -s -k "$KPWD" "$KEYCHAIN" >/dev/null
             security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
 
-            IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/[0-9]+\)/ {print $2; exit}')"
+            # Reference the identity by its SHA-1 hash. A self-signed cert is not
+            # "policy-valid" (no trust chain), so `find-identity -v` would skip it;
+            # without -v it's listed and signable by hash.
+            IDENTITY="$(security find-identity -p codesigning "$KEYCHAIN" | grep -oE '[0-9A-F]{40}' | head -1)"
+            if [ -z "$IDENTITY" ]; then
+              echo "::error::No code-signing identity found in the imported keychain (check the .p12 secret)."
+              exit 1
+            fi
             echo "Using identity: $IDENTITY"
             # No hardened runtime: the app isn't notarized and project.yml sets
             # ENABLE_HARDENED_RUNTIME: NO. We only need a stable, cert-based
