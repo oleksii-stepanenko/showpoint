@@ -197,12 +197,12 @@ enum AnnotationRender {
     }
 
     static func drawSelection(_ bounds: CGRect, in context: inout GraphicsContext) {
+        // Keep this whisper-faint — the resize handles are the real selection
+        // signal; a bright box steals attention from the drawing itself.
         let r = bounds.insetBy(dx: -5, dy: -5)
         let path = Path(roundedRect: r, cornerRadius: 5)
-        context.stroke(path, with: .color(.white.opacity(0.9)),
-                       style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-        context.stroke(path, with: .color(.accentColor),
-                       style: StrokeStyle(lineWidth: 1.5, dash: [6, 4], dashPhase: 6))
+        context.stroke(path, with: .color(.white.opacity(0.08)),
+                       style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
     }
 
     static func drawHandles(_ handles: [AnnotationHandle], in context: inout GraphicsContext) {
