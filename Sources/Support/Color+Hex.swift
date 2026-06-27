@@ -17,6 +17,20 @@ extension Color {
         )
     }
 
+    /// Black or white — whichever reads better on top of `hex`. Used for text
+    /// drawn inside a colored callout bubble so light fills don't get white text.
+    static func contrastingText(onHex hex: String) -> Color {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")).uppercased()
+        var value: UInt64 = 0
+        guard cleaned.count == 6, Scanner(string: cleaned).scanHexInt64(&value) else { return .white }
+        let r = Double((value >> 16) & 0xFF) / 255.0
+        let g = Double((value >> 8) & 0xFF) / 255.0
+        let b = Double(value & 0xFF) / 255.0
+        // Perceived luminance (Rec. 601). Bright fills → black text, dark → white.
+        let luma = 0.299 * r + 0.587 * g + 0.114 * b
+        return luma > 0.6 ? .black : .white
+    }
+
     /// "#RRGGBB" representation, for persisting a `ColorPicker` selection.
     var hexString: String {
         let ns = NSColor(self).usingColorSpace(.sRGB) ?? .yellow

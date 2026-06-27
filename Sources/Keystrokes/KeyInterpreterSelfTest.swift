@@ -190,6 +190,31 @@ enum KeyInterpreterSelfTest {
         ok = check("single-click counter gets a tail", mc.shapes[0].points.count == 2, true) && ok
         ok = check("counter hit-tests its badge", mc.shapes[0].hitTest(CGPoint(x: 100, y: 100), tolerance: 5), true) && ok
 
+        // Text callout: placement, typing, multi-line growth, commit rules.
+        store.annotationTool = .text
+        let mt = AnnotationModel(settings: store)
+        mt.beginTextEditing(at: CGPoint(x: 400, y: 300))
+        ok = check("text begins in editing mode", mt.isEditingText, true) && ok
+        ok = check("new text gets a default tail", mt.shapes.first?.points.count == 2, true) && ok
+        mt.insertText("Hi"); mt.insertTextNewline(); mt.insertText("there")
+        ok = check("typed text accumulates", mt.shapes.first?.text == "Hi\nthere", true) && ok
+        mt.deleteTextCharacter()
+        ok = check("backspace removes last char", mt.shapes.first?.text == "Hi\nther", true) && ok
+        let twoLineHeight = mt.shapes.first?.textSize.height ?? 0
+        let oneLine = AnnotationText.lineHeight(size: mt.shapes.first?.fontSize ?? 16)
+        ok = check("multi-line box is taller than one line", twoLineHeight > oneLine * 1.5, true) && ok
+        ok = check("committing non-empty text keeps it", mt.commitTextEditing(), true) && ok
+        ok = check("not editing after commit", !mt.isEditingText, true) && ok
+        ok = check("committed text hit-tests its bubble",
+                   mt.shapes.first?.hitTest(CGPoint(x: 400, y: 300), tolerance: 0) == true, true) && ok
+        ok = check("text exposes a tail handle", mt.selectionHandles.count == 1, true) && ok
+
+        // An all-whitespace callout is discarded on commit (stray clicks don't litter).
+        let mte = AnnotationModel(settings: store)
+        mte.beginTextEditing(at: CGPoint(x: 10, y: 10))
+        ok = check("empty callout discarded on commit", mte.commitTextEditing() == false && mte.shapes.isEmpty, true) && ok
+        store.annotationTool = previousTool
+
         // Spotlight resizes via corner handles.
         let spot = DrawnShape(tool: .spotlight, colorHex: "#000", lineWidth: 2,
                               points: [CGPoint(x: 0, y: 0), CGPoint(x: 200, y: 120)])

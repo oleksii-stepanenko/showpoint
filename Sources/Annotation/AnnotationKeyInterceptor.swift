@@ -15,6 +15,13 @@ final class AnnotationKeyInterceptor {
     var onToolKey: ((AnnotationTool) -> Void)?
     var onCycleColor: (() -> Void)?
 
+    // Text-editing mode: while a callout is open, keystrokes feed the text box
+    // instead of firing tool shortcuts.
+    var isEditingText: (() -> Bool)?
+    var onTextInput: ((String) -> Void)?
+    var onTextBackspace: (() -> Void)?
+    var onTextNewline: (() -> Void)?
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
@@ -54,6 +61,12 @@ final class AnnotationKeyInterceptor {
             return false
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+
+        // While a text callout is open, route keys into the text box.
+        if isEditingText?() == true {
+            return handleTextEditing(keyCode: keyCode, event: event)
+        }
+
         switch keyCode {
         case 53:                              // Esc
             // Dispatch async — the handler may tear down this tap.
@@ -75,6 +88,53 @@ final class AnnotationKeyInterceptor {
         default:
             return handleCharacterShortcut(event)
         }
+    }
+
+    /// Keystroke routing while typing into a text callout. The rule is
+    /// bare-vs-modified, NOT "consume everything":
+    ///   • Bare keys are consumed — printable ones go into the box, Return/
+    ///     Backspace/Esc do their thing, arrows/fn are swallowed. This is what
+    ///     stops a typed "t"/"a"/… from firing a tool shortcut, and stops arrows
+    ///     from leaking to the app underneath (e.g. flipping slides).
+    ///   • Modifier combos pass through (return false) so ⌘Q / ⌘Tab / ⌘Space /
+    ///     Spotlight keep working — except ⌘V, which pastes into the box.
+    private func handleTextEditing(keyCode: Int64, event: CGEvent) -> Bool {
+        let modifiers = event.flags.intersection([.maskCommand, .maskControl, .maskAlternate])
+        if !modifiers.isEmpty {
+            if modifiers == .maskCommand,
+               typedCharacter(event)?.lowercased().first == "v" {
+                DispatchQueue.main.async { [weak self] in
+                    if let pasted = NSPasteboard.general.string(forType: .string), !pasted.isEmpty {
+                        self?.onTextInput?(pasted)
+                    }
+                }
+                return true
+            }
+            return false   // let the system keep its ⌘-combos
+        }
+
+        switch keyCode {
+        case 53:                              // Esc — commit (handled by onEscape)
+            DispatchQueue.main.async { [weak self] in self?.onEscape?() }
+        case 51, 117:                         // Backspace / Forward-Delete
+            DispatchQueue.main.async { [weak self] in self?.onTextBackspace?() }
+        case 36, 76:                          // Return / keypad Enter — newline
+            DispatchQueue.main.async { [weak self] in self?.onTextNewline?() }
+        default:
+            if let string = typedCharacter(event), Self.isPrintable(string) {
+                DispatchQueue.main.async { [weak self] in self?.onTextInput?(string) }
+            }
+        }
+        return true   // every bare key is consumed while typing
+    }
+
+    /// True for real text input — filters control characters and the private-use
+    /// scalars AppKit returns for arrows / function keys.
+    private static func isPrintable(_ string: String) -> Bool {
+        guard let scalar = string.unicodeScalars.first else { return false }
+        if scalar.value < 0x20 { return false }
+        if (0xF700...0xF8FF).contains(scalar.value) { return false }
+        return true
     }
 
     /// Character-based shortcuts: ⌘Z = undo; bare F = toggle fill; bare tool

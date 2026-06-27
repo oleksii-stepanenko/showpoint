@@ -14,8 +14,9 @@ struct AnnotationRootView: View {
                 .padding(.bottom, 28)
         }
         .ignoresSafeArea()
-        // Leaving the pen tool ends the current pen group.
+        // Switching tools commits any open text box and ends the pen group.
         .onChange(of: settings.annotationTool) { _, newTool in
+            model.commitTextEditing()
             if newTool != .pen { model.endPenSession() }
         }
     }
@@ -35,23 +36,14 @@ private struct AnnotationCanvas: View {
     private let handleHitRadius: CGFloat = 12
 
     var body: some View {
-        Canvas { context, size in
-            var spotlights = model.shapes.filter { $0.tool == .spotlight && $0.points.count >= 2 }
-            if let current = model.current, current.tool == .spotlight, current.points.count >= 2 {
-                spotlights.append(current)
-            }
-            AnnotationRender.drawSpotlightDim(spotlights, size: size, in: &context)
-
-            // Spotlights are realized by the dim layer above, not stroked here.
-            for shape in model.shapes where shape.tool != .spotlight {
-                AnnotationRender.draw(shape, in: &context)
-            }
-            if let current = model.current, current.tool != .spotlight {
-                AnnotationRender.draw(current, in: &context)
-            }
-            if let bounds = model.selectionBounds {
-                AnnotationRender.drawSelection(bounds, in: &context)
-                AnnotationRender.drawHandles(model.selectionHandles, in: &context)
+        Group {
+            // Only spin a timeline (for the blinking caret) while actually typing.
+            if model.editingTextID != nil {
+                TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
+                    canvas(caretVisible: Self.caretVisible(at: timeline.date))
+                }
+            } else {
+                canvas(caretVisible: false)
             }
         }
         .background(Color.black.opacity(0.001))   // makes the whole area hit-testable
@@ -69,6 +61,40 @@ private struct AnnotationCanvas: View {
         )
     }
 
+    private static func caretVisible(at date: Date) -> Bool {
+        Int(date.timeIntervalSinceReferenceDate / 0.5) % 2 == 0
+    }
+
+    private func canvas(caretVisible: Bool) -> some View {
+        Canvas { context, size in
+            var spotlights = model.shapes.filter { $0.tool == .spotlight && $0.points.count >= 2 }
+            if let current = model.current, current.tool == .spotlight, current.points.count >= 2 {
+                spotlights.append(current)
+            }
+            AnnotationRender.drawSpotlightDim(spotlights, size: size, in: &context)
+
+            // Spotlights are realized by the dim layer above, not stroked here.
+            for shape in model.shapes where shape.tool != .spotlight {
+                if shape.tool == .text {
+                    AnnotationRender.drawText(shape,
+                                              editing: shape.id == model.editingTextID,
+                                              caretVisible: caretVisible, in: &context)
+                } else {
+                    AnnotationRender.draw(shape, in: &context)
+                }
+            }
+            if let current = model.current, current.tool != .spotlight {
+                AnnotationRender.draw(current, in: &context)
+            }
+            // Hide the selection chrome over the box you're typing into — the
+            // caret is signal enough.
+            if model.editingTextID == nil, let bounds = model.selectionBounds {
+                AnnotationRender.drawSelection(bounds, in: &context)
+                AnnotationRender.drawHandles(model.selectionHandles, in: &context)
+            }
+        }
+    }
+
     /// Decide what a fresh drag does: resize a handle, move/select an object, or
     /// draw with the current tool. Works the same for every tool — clicking an
     /// object always grabs it; clicking empty draws (or, with Select, deselects).
@@ -83,15 +109,32 @@ private struct AnnotationCanvas: View {
             return
         }
 
+        // Clicking inside the callout you're already typing into: keep editing.
+        if let editing = model.editingTextID, model.hitTest(point)?.id == editing {
+            mode = .idle
+            return
+        }
+        // Any other click finishes an in-progress text edit first.
+        if model.editingTextID != nil { model.commitTextEditing() }
+
         // 2. An existing object?
-        if model.hitTest(point) != nil {
+        if let hit = model.hitTest(point) {
+            if settings.annotationTool == .text && hit.tool == .text {
+                model.editTextShape(id: hit.id)   // re-open it for typing
+                mode = .idle
+                return
+            }
             model.selectShape(at: point)
             mode = .moving
             return
         }
 
         // 3. Empty space.
-        if settings.annotationTool.drawsObjects {
+        if settings.annotationTool == .text {
+            model.deselect()
+            model.beginTextEditing(at: point)
+            mode = .idle
+        } else if settings.annotationTool.drawsObjects {
             model.deselect()
             model.begin(at: point)
             mode = .drawing
@@ -149,9 +192,66 @@ enum AnnotationRender {
             context.stroke(path, with: .color(shape.color), style: style)
         case .counter:
             drawCounter(shape, in: &context)
+        case .text:
+            break   // drawn by drawText (needs editing/caret state from the view)
         case .spotlight:
             break   // realized by the dim layer
         }
+    }
+
+    /// A speech-bubble callout: a filled rounded rect with the text inside, an
+    /// optional tail toward `points[1]`, and a blinking caret while editing.
+    static func drawText(_ shape: DrawnShape, editing: Bool, caretVisible: Bool,
+                         in context: inout GraphicsContext) {
+        guard let origin = shape.points.first else { return }
+        let bubble = shape.textBubbleRect
+        let fill = shape.color
+        let textColor = Color.contrastingText(onHex: shape.colorHex)
+
+        if shape.points.count >= 2 {
+            drawCalloutTail(from: bubble, to: shape.points[1], color: fill, in: &context)
+        }
+        context.fill(Path(roundedRect: bubble, cornerRadius: 12), with: .color(fill))
+
+        // Draw line-by-line at the same metrics the model measured with, so the
+        // caret lands exactly at the text's end.
+        let font = Font.system(size: shape.fontSize, weight: .semibold)
+        let lineHeight = AnnotationText.lineHeight(size: shape.fontSize)
+        let lines = shape.text.isEmpty ? [""] : shape.text.components(separatedBy: "\n")
+        for (index, line) in lines.enumerated() where !line.isEmpty {
+            let y = origin.y + CGFloat(index) * lineHeight
+            context.draw(Text(line).font(font).foregroundColor(textColor),
+                         at: CGPoint(x: origin.x, y: y), anchor: .topLeading)
+        }
+
+        if editing && caretVisible {
+            let lastIndex = lines.count - 1
+            let caretX = origin.x + AnnotationText.lineWidth(lines[lastIndex], size: shape.fontSize)
+            let caretY = origin.y + CGFloat(lastIndex) * lineHeight
+            var caret = Path()
+            caret.move(to: CGPoint(x: caretX, y: caretY + 2))
+            caret.addLine(to: CGPoint(x: caretX, y: caretY + lineHeight - 2))
+            context.stroke(caret, with: .color(textColor), lineWidth: max(1.5, shape.fontSize * 0.06))
+        }
+    }
+
+    /// A triangular tail from the bubble's top or bottom edge toward `tip`
+    /// (only when the tip is clearly above/below the bubble).
+    private static func drawCalloutTail(from bubble: CGRect, to tip: CGPoint,
+                                        color: Color, in context: inout GraphicsContext) {
+        let pointsDown = tip.y > bubble.maxY
+        let pointsUp = tip.y < bubble.minY
+        guard pointsDown || pointsUp else { return }
+
+        let baseY = pointsDown ? bubble.maxY : bubble.minY
+        let half: CGFloat = 11
+        let cx = min(max(tip.x, bubble.minX + half + 4), bubble.maxX - half - 4)
+        var tail = Path()
+        tail.move(to: CGPoint(x: cx - half, y: baseY))
+        tail.addLine(to: CGPoint(x: cx + half, y: baseY))
+        tail.addLine(to: tip)
+        tail.closeSubpath()
+        context.fill(tail, with: .color(color))
     }
 
     /// Dims the whole canvas, punching a clear hole for each spotlight ellipse.

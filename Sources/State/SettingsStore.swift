@@ -146,9 +146,9 @@ final class SettingsStore: ObservableObject {
 }
 
 /// Tools for screen annotation. `select` is the pointer used to click/move/delete
-/// existing objects. (Text and blur are intentionally deferred.)
+/// existing objects. (Blur is intentionally deferred.)
 enum AnnotationTool: String, CaseIterable, Identifiable {
-    case select, pen, highlighter, line, arrow, rectangle, ellipse, counter, spotlight
+    case select, pen, highlighter, line, arrow, rectangle, ellipse, counter, text, spotlight
     var id: String { rawValue }
 
     var label: String {
@@ -161,6 +161,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
         case .rectangle:   return "Rectangle"
         case .ellipse:     return "Ellipse"
         case .counter:     return "Counter"
+        case .text:        return "Text"
         case .spotlight:   return "Spotlight"
         }
     }
@@ -175,6 +176,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
         case .rectangle:   return "rectangle"
         case .ellipse:     return "circle"
         case .counter:     return "1.circle"
+        case .text:        return "text.bubble"
         case .spotlight:   return "rays"
         }
     }
@@ -196,6 +198,7 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
         case .rectangle:   return "r"
         case .ellipse:     return "o"
         case .counter:     return "c"
+        case .text:        return "t"
         case .spotlight:   return "s"
         }
     }

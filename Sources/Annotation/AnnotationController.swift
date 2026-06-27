@@ -46,6 +46,10 @@ final class AnnotationController: ObservableObject {
         keyInterceptor.onToggleFill = { [weak self] in self?.model.toggleFill() }
         keyInterceptor.onToolKey = { [weak self] tool in self?.settings.annotationTool = tool }
         keyInterceptor.onCycleColor = { [weak self] in self?.model.cycleColor() }
+        keyInterceptor.isEditingText = { [weak self] in self?.model.isEditingText ?? false }
+        keyInterceptor.onTextInput = { [weak self] text in self?.model.insertText(text) }
+        keyInterceptor.onTextBackspace = { [weak self] in self?.model.deleteTextCharacter() }
+        keyInterceptor.onTextNewline = { [weak self] in self?.model.insertTextNewline() }
     }
 
     func start() {
@@ -73,6 +77,7 @@ final class AnnotationController: ObservableObject {
 
     func stop() {
         keyInterceptor.uninstall()
+        model.commitTextEditing()
         panel?.orderOut(nil)
         panel = nil
         model.endPenSession()
@@ -83,6 +88,12 @@ final class AnnotationController: ObservableObject {
     // MARK: Keyboard
 
     private func handleEscape() {
+        // While typing, Esc commits the callout and stays in annotation —
+        // it must NOT also drop out of the tool / annotation.
+        if model.isEditingText {
+            model.commitTextEditing()
+            return
+        }
         switch AnnotationEscape.outcome(tool: settings.annotationTool) {
         case .exitTool:
             model.endPenSession()

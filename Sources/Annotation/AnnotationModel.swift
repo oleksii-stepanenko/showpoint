@@ -1,4 +1,32 @@
 import SwiftUI
+import AppKit
+
+/// Text metrics shared by the model (sizing the bubble) and the renderer (laying
+/// out lines + the caret). Measuring and drawing use the *same* font so the caret
+/// lands exactly at the end of the typed text.
+enum AnnotationText {
+    static func font(size: CGFloat) -> NSFont {
+        NSFont.systemFont(ofSize: size, weight: .semibold)
+    }
+
+    static func lineHeight(size: CGFloat) -> CGFloat {
+        let f = font(size: size)
+        return ceil(f.ascender - f.descender + f.leading)
+    }
+
+    static func lineWidth(_ line: String, size: CGFloat) -> CGFloat {
+        guard !line.isEmpty else { return 0 }
+        return ceil((line as NSString).size(withAttributes: [.font: font(size: size)]).width)
+    }
+
+    /// Bounding size of `text` laid out line-by-line (handles a trailing newline,
+    /// so the box grows the moment Return is pressed).
+    static func measure(_ text: String, size: CGFloat) -> CGSize {
+        let lines = text.isEmpty ? [""] : text.components(separatedBy: "\n")
+        let w = lines.map { lineWidth($0, size: size) }.max() ?? 0
+        return CGSize(width: w, height: lineHeight(size: size) * CGFloat(lines.count))
+    }
+}
 
 /// A corner of an object's bounding box (canvas coords: y increases downward).
 enum BoxCorner: CaseIterable {
@@ -48,9 +76,15 @@ struct DrawnShape: Identifiable {
     var groupID: UUID?
     /// Auto-incremented label for the Counter tool.
     var counterNumber: Int?
+    /// Typed content for the Text callout. `points[0]` is the text's top-left;
+    /// `points[1]` (optional) is the speech-bubble tail tip.
+    var text: String
+    /// Cached measured size of `text` — kept in sync by the model on every edit.
+    var textSize: CGSize
 
     init(tool: AnnotationTool, colorHex: String, lineWidth: CGFloat,
-         filled: Bool = false, points: [CGPoint], groupID: UUID? = nil, counterNumber: Int? = nil) {
+         filled: Bool = false, points: [CGPoint], groupID: UUID? = nil,
+         counterNumber: Int? = nil, text: String = "") {
         self.tool = tool
         self.colorHex = colorHex
         self.lineWidth = lineWidth
@@ -58,12 +92,31 @@ struct DrawnShape: Identifiable {
         self.points = points
         self.groupID = groupID
         self.counterNumber = counterNumber
+        self.text = text
+        self.textSize = tool == .text ? AnnotationText.measure(text, size: max(15, lineWidth * 4)) : .zero
     }
 
     var color: Color { Color(hex: colorHex) }
 
     /// Radius of the counter badge (scales with line weight).
     var counterRadius: CGFloat { max(14, lineWidth * 3.5) }
+
+    /// Point size of callout text, scaled off the line-weight slider.
+    var fontSize: CGFloat { max(15, lineWidth * 4) }
+
+    /// Padding between the text and the bubble edge.
+    static let textPadH: CGFloat = 13
+    static let textPadV: CGFloat = 9
+
+    /// Rounded-rect bubble that wraps the text (with a sensible minimum so an
+    /// empty box being typed into is still visible).
+    var textBubbleRect: CGRect {
+        guard let origin = points.first else { return .zero }
+        let w = max(textSize.width, fontSize * 0.6)
+        let h = max(textSize.height, AnnotationText.lineHeight(size: fontSize))
+        return CGRect(x: origin.x - Self.textPadH, y: origin.y - Self.textPadV,
+                      width: w + Self.textPadH * 2, height: h + Self.textPadV * 2)
+    }
 
     /// Tight bounding box of the points (no stroke padding) — used for handles.
     var rawBounds: CGRect {
@@ -78,6 +131,7 @@ struct DrawnShape: Identifiable {
 
     /// Bounding box padded by the stroke half-width (for selection outline / hit-test).
     var bounds: CGRect {
+        if tool == .text { return textBubbleRect.insetBy(dx: -2, dy: -2) }
         if tool == .counter, let center = points.first {
             let r = counterRadius
             var box = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
@@ -95,7 +149,7 @@ struct DrawnShape: Identifiable {
         switch tool {
         case .select:
             return false
-        case .rectangle, .ellipse, .spotlight:
+        case .rectangle, .ellipse, .spotlight, .text:
             // Select by bounding box — easy to click.
             return bounds.contains(point)
         case .counter:
@@ -145,6 +199,8 @@ final class AnnotationModel: ObservableObject {
     @Published private(set) var shapes: [DrawnShape] = []
     @Published private(set) var current: DrawnShape?
     @Published private(set) var selectedID: UUID?
+    /// The text callout currently being typed into, if any.
+    @Published private(set) var editingTextID: UUID?
 
     private let settings: SettingsStore
     /// Shared group id for the current run of pen strokes (until ESC / tool change).
@@ -212,6 +268,68 @@ final class AnnotationModel: ObservableObject {
     /// Ends the current pen run; the next pen stroke starts a fresh group.
     func endPenSession() { penGroup = nil }
 
+    // MARK: Text editing
+
+    var isEditingText: Bool { editingTextID != nil }
+
+    /// Places a new (empty) text callout and starts editing it. Any text already
+    /// being edited is committed first.
+    func beginTextEditing(at point: CGPoint) {
+        commitTextEditing()
+        var shape = DrawnShape(
+            tool: .text,
+            colorHex: settings.annotationColorHex,
+            lineWidth: settings.annotationLineWidth,
+            // Default tail pointing down-left, like a speech bubble.
+            points: [point, CGPoint(x: point.x + 6, y: point.y + 78)]
+        )
+        recomputeTextSize(&shape)
+        shapes.append(shape)
+        selectedID = shape.id
+        editingTextID = shape.id
+    }
+
+    /// Re-enters editing of an existing text callout.
+    func editTextShape(id: UUID) {
+        commitTextEditing()
+        guard shapes.contains(where: { $0.id == id }) else { return }
+        selectedID = id
+        editingTextID = id
+    }
+
+    func insertText(_ string: String) { mutateEditingText { $0.text += string } }
+    func insertTextNewline() { mutateEditingText { $0.text += "\n" } }
+    func deleteTextCharacter() {
+        mutateEditingText { if !$0.text.isEmpty { $0.text.removeLast() } }
+    }
+
+    /// Finishes editing. An all-whitespace callout is discarded so stray clicks
+    /// don't litter the canvas with empty bubbles.
+    @discardableResult
+    func commitTextEditing() -> Bool {
+        guard let id = editingTextID, let index = shapes.firstIndex(where: { $0.id == id }) else {
+            editingTextID = nil
+            return false
+        }
+        editingTextID = nil
+        if shapes[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            shapes.remove(at: index)
+            if selectedID == id { selectedID = nil }
+            return false
+        }
+        return true
+    }
+
+    private func mutateEditingText(_ change: (inout DrawnShape) -> Void) {
+        guard let id = editingTextID, let index = shapes.firstIndex(where: { $0.id == id }) else { return }
+        change(&shapes[index])
+        recomputeTextSize(&shapes[index])
+    }
+
+    private func recomputeTextSize(_ shape: inout DrawnShape) {
+        shape.textSize = AnnotationText.measure(shape.text, size: shape.fontSize)
+    }
+
     // MARK: Selection & editing
 
     /// Top-most shape under `point` (last drawn wins for overlaps).
@@ -275,8 +393,8 @@ final class AnnotationModel: ObservableObject {
                     AnnotationHandle(role: .endpoint(1), position: shape.points[shape.points.count - 1]),
                 ]
             }
-            // Counter: one handle on the tail tip to re-aim it.
-            if shape.tool == .counter, shape.points.count >= 2 {
+            // Counter / Text: one handle on the tail tip to re-aim it.
+            if (shape.tool == .counter || shape.tool == .text), shape.points.count >= 2 {
                 return [AnnotationHandle(role: .endpoint(1), position: shape.points[1])]
             }
         }
@@ -399,6 +517,9 @@ final class AnnotationModel: ObservableObject {
             DrawnShape(tool: .counter, colorHex: "#30D158", lineWidth: 5, points: [CGPoint(x: 1000, y: 320), CGPoint(x: 960, y: 370)], counterNumber: 1),
             DrawnShape(tool: .counter, colorHex: "#30D158", lineWidth: 5, points: [CGPoint(x: 1080, y: 460), CGPoint(x: 1130, y: 510)], counterNumber: 2),
             DrawnShape(tool: .spotlight, colorHex: "#000000", lineWidth: 2, points: [CGPoint(x: 360, y: 760), CGPoint(x: 720, y: 980)]),
+            DrawnShape(tool: .text, colorHex: "#0BA678", lineWidth: 4,
+                       points: [CGPoint(x: 1000, y: 640), CGPoint(x: 980, y: 800)],
+                       text: "Text\ncan be multi lines"),
         ]
         selectedID = shapes[1].id   // select the arrow to show endpoint handles
     }
