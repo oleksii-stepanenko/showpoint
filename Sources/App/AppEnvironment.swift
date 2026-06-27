@@ -77,10 +77,16 @@ final class AppEnvironment: ObservableObject {
         startPermissionWatcher()
     }
 
-    /// Annotation needs no special permission (it's a window that captures the
-    /// mouse), so it starts/stops directly with its toggle.
+    /// Annotation's mouse drawing needs no permission, but its keyboard shortcuts
+    /// (Esc, the tool keys, the Text tool) ride a CGEventTap that requires
+    /// Accessibility. Prompt for it if it's missing — drawing works meanwhile, and
+    /// the watcher re-arms the keyboard the moment permission is granted.
     func applyAnnotationState(_ enabled: Bool) {
         if enabled {
+            permissions.refresh()
+            if !permissions.accessibilityGranted {
+                permissions.requestAccessibility()   // shows the system prompt
+            }
             annotation.start()
         } else {
             annotation.stop()
@@ -133,6 +139,8 @@ final class AppEnvironment: ObservableObject {
             if settings.keystrokesEnabled && !keystrokes.isRunning {
                 keystrokes.start()
             }
+            // If annotation is already showing, bring its keyboard to life now.
+            annotation.reinstallKeyboardIfNeeded()
         }
 
         if permissions.accessibilityGranted != wasGranted {

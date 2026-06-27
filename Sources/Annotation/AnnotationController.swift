@@ -75,6 +75,18 @@ final class AnnotationController: ObservableObject {
         }
     }
 
+    /// True once the keyboard event tap is live (needs Accessibility). When it's
+    /// false, the overlay still draws with the mouse but no keys are handled.
+    var keyboardActive: Bool { keyInterceptor.isInstalled }
+
+    /// Re-attempts the keyboard tap if annotation is showing but the tap never
+    /// came up (Accessibility was granted after start). Lets keys work without
+    /// toggling annotation off and on.
+    func reinstallKeyboardIfNeeded() {
+        guard isActive, !keyInterceptor.isInstalled else { return }
+        keyInterceptor.install()
+    }
+
     func stop() {
         keyInterceptor.uninstall()
         model.commitTextEditing()

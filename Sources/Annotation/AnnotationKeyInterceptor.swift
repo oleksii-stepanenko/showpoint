@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import ApplicationServices
 
 /// While annotation is active, intercepts Esc and Delete/Backspace via a
 /// `CGEventTap` and consumes them (so they don't reach the app underneath).
@@ -38,13 +39,17 @@ final class AnnotationKeyInterceptor {
             eventsOfInterest: mask,
             callback: annotationKeyCallback,
             userInfo: refcon
-        ) else { return }
+        ) else {
+            NSLog("Showpoint: annotation key tap FAILED to create — Accessibility not granted for this binary (AXIsProcessTrusted=\(AXIsProcessTrusted()))")
+            return
+        }
 
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         eventTap = tap
         runLoopSource = source
+        NSLog("Showpoint: annotation key tap INSTALLED (AXIsProcessTrusted=\(AXIsProcessTrusted()))")
     }
 
     func uninstall() {
