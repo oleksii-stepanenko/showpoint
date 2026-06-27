@@ -11,8 +11,12 @@ demos, tutorials, screen recordings, and live presentations.
 
 [![Download](https://img.shields.io/badge/Download-.dmg-30C758?style=for-the-badge&logo=apple&logoColor=white)](../../releases/latest)
 &nbsp;
+[![Website](https://img.shields.io/badge/Website-showpoint-30C758?style=for-the-badge&logo=githubpages&logoColor=white)](https://oleksii-stepanenko.github.io/showpoint/)
+&nbsp;
 ![Platform](https://img.shields.io/badge/macOS-14%2B-111?style=for-the-badge&logo=apple)
 ![License](https://img.shields.io/badge/License-Free-blue?style=for-the-badge)
+
+**🌐 [oleksii-stepanenko.github.io/showpoint](https://oleksii-stepanenko.github.io/showpoint/)**
 
 <img src="docs/assets/hero.png" width="760" alt="Showpoint" />
 
@@ -52,25 +56,39 @@ spotlight dims everything but the area you care about.
 
 ## 🚀 Install
 
-1. **[Download the latest `.dmg`](../../releases/latest)**, open it, and drag **Showpoint**
-   to your **Applications** folder.
+### Homebrew (recommended)
 
-2. **Run this command once** (required) — open **Terminal** and paste:
+```sh
+brew install --cask oleksii-stepanenko/tap/showpoint
+```
 
-   ```sh
-   xattr -dr com.apple.quarantine /Applications/Showpoint.app
-   ```
+### Direct download
 
-   > **Why?** Showpoint isn't notarized yet (that needs a paid Apple Developer ID), so
-   > macOS quarantines it and otherwise shows **"Showpoint is damaged and can't be
-   > opened."** It is **not** damaged — this command removes the quarantine flag and the
-   > app opens normally. (Standard for unsigned open-source Mac apps.)
+**[Download the latest `.dmg`](../../releases/latest)**, open it, and drag **Showpoint**
+to your **Applications** folder.
 
-3. Open **Showpoint** from Applications — it lives in the **menu bar** (no Dock icon).
+### First launch
 
-4. The first time you show keystrokes or use a shortcut, macOS asks for **Accessibility**
-   permission (System Settings → Privacy & Security → Accessibility). Grant it once and
-   Showpoint starts working automatically.
+Showpoint is signed with a self-signed certificate but **not notarized** by Apple (that
+needs a paid Apple Developer ID), so macOS gates the first launch. Pick either:
+
+- **Open via Settings:** double-click Showpoint, then go to **System Settings → Privacy &
+  Security**, scroll to **Security**, and click **Open Anyway**. (This recurs after each
+  update.) — or —
+- **Clear the quarantine flag** so it just opens, in **Terminal**:
+
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/Showpoint.app
+  ```
+
+> The app is **not** "damaged" — the signature is valid; it's simply not notarized by
+> Apple. Because the signature is stable, the **Accessibility** permission below survives
+> updates (only the Gatekeeper step above recurs).
+
+Then open **Showpoint** from Applications — it lives in the **menu bar** (no Dock icon).
+The first time you show keystrokes or use a shortcut, macOS asks for **Accessibility**
+permission (System Settings → Privacy & Security → Accessibility). Grant it once and
+Showpoint starts working automatically.
 
 ---
 

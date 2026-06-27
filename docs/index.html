@@ -31,6 +31,18 @@
     .cta:hover { transform: translateY(-2px); }
     .cta-note { display:block; color: var(--muted); font-size: 13px; margin-top: 12px; }
 
+    .brew { margin-top: 22px; }
+    .brew-label { display:block; color: var(--muted); font-size: 13px; margin-bottom: 9px;
+      text-transform: uppercase; letter-spacing: .08em; }
+    .brew-cmd { display:inline-flex; align-items:center; gap:12px; cursor:pointer;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14.5px;
+      background:#0f1514; color:#dfe7e4; border:1px solid rgba(48,199,88,.4);
+      padding:13px 18px; border-radius:12px; transition: border-color .12s ease; }
+    .brew-cmd:hover { border-color: var(--teal); }
+    .brew-cmd .dollar { color: var(--teal); font-weight: 700; }
+    .brew-cmd .hint { color: var(--muted); font-size: 12px; border-left:1px solid rgba(255,255,255,.12);
+      padding-left: 12px; }
+
     section { padding: 56px 0; border-top: 1px solid rgba(255,255,255,.06); }
     .feature { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; margin: 36px 0; }
     .feature:nth-child(even) .text { order: 2; }
@@ -53,6 +65,15 @@
     <p class="tag">Keystrokes · Cursor highlight · Screen annotation</p>
     <p class="sub">A lightweight macOS menu-bar tool for demos, tutorials &amp; screen recordings.</p>
     <a class="cta" href="__REPO_URL__/releases/latest">⬇&nbsp; Download for macOS</a>
+    <div class="brew">
+      <span class="brew-label">or install with Homebrew</span>
+      <button type="button" class="brew-cmd" onclick="copyBrew(this)"
+              data-cmd="brew install --cask oleksii-stepanenko/tap/showpoint">
+        <span class="dollar">$</span>
+        <span class="cmd">brew install --cask oleksii-stepanenko/tap/showpoint</span>
+        <span class="hint">Copy</span>
+      </button>
+    </div>
     <span class="cta-note">macOS 14+ · Free · <a href="__REPO_URL__">View on GitHub</a></span>
   </header>
 
@@ -98,5 +119,16 @@
     Built natively in Swift / SwiftUI by Oleksii Stepanenko · Free ·
     <a href="__REPO_URL__">GitHub</a>
   </footer>
+
+  <script>
+    function copyBrew(el) {
+      navigator.clipboard.writeText(el.dataset.cmd).then(function () {
+        var hint = el.querySelector('.hint');
+        var prev = hint.textContent;
+        hint.textContent = 'Copied!';
+        setTimeout(function () { hint.textContent = prev; }, 1500);
+      });
+    }
+  </script>
 </body>
 </html>
