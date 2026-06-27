@@ -6,7 +6,10 @@ import AppKit
 /// lands exactly at the end of the typed text.
 enum AnnotationText {
     static func font(size: CGFloat) -> NSFont {
-        NSFont.systemFont(ofSize: size, weight: .semibold)
+        let base = NSFont.systemFont(ofSize: size, weight: .semibold)
+        guard let descriptor = base.fontDescriptor.withDesign(.rounded),
+              let rounded = NSFont(descriptor: descriptor, size: size) else { return base }
+        return rounded
     }
 
     static func lineHeight(size: CGFloat) -> CGFloat {
@@ -104,18 +107,20 @@ struct DrawnShape: Identifiable {
     /// Point size of callout text, scaled off the line-weight slider.
     var fontSize: CGFloat { max(15, lineWidth * 4) }
 
-    /// Padding between the text and the bubble edge.
-    static let textPadH: CGFloat = 13
-    static let textPadV: CGFloat = 9
+    /// Padding between the text and the bubble edge — scales with the font so big
+    /// text doesn't look cramped.
+    var textPadH: CGFloat { max(16, fontSize * 0.55) }
+    var textPadV: CGFloat { max(10, fontSize * 0.34) }
 
     /// Rounded-rect bubble that wraps the text (with a sensible minimum so an
-    /// empty box being typed into is still visible).
+    /// empty box being typed into is still visible). `points[0]` is the text's
+    /// top-left; the bubble is that, expanded by the padding.
     var textBubbleRect: CGRect {
         guard let origin = points.first else { return .zero }
         let w = max(textSize.width, fontSize * 0.6)
         let h = max(textSize.height, AnnotationText.lineHeight(size: fontSize))
-        return CGRect(x: origin.x - Self.textPadH, y: origin.y - Self.textPadV,
-                      width: w + Self.textPadH * 2, height: h + Self.textPadV * 2)
+        return CGRect(x: origin.x - textPadH, y: origin.y - textPadV,
+                      width: w + textPadH * 2, height: h + textPadV * 2)
     }
 
     /// Tight bounding box of the points (no stroke padding) — used for handles.
@@ -276,12 +281,13 @@ final class AnnotationModel: ObservableObject {
     /// being edited is committed first.
     func beginTextEditing(at point: CGPoint) {
         commitTextEditing()
+        let fontSize = max(15, settings.annotationLineWidth * 4)
         var shape = DrawnShape(
             tool: .text,
             colorHex: settings.annotationColorHex,
             lineWidth: settings.annotationLineWidth,
-            // Default tail pointing down-left, like a speech bubble.
-            points: [point, CGPoint(x: point.x + 6, y: point.y + 78)]
+            // Short, proportional speech-bubble tail pointing down-left by default.
+            points: [point, CGPoint(x: point.x + fontSize * 0.4, y: point.y + fontSize * 3)]
         )
         recomputeTextSize(&shape)
         shapes.append(shape)
@@ -498,7 +504,11 @@ final class AnnotationModel: ObservableObject {
     }
 
     private func mutateSelected(_ change: (inout DrawnShape) -> Void) {
-        for index in selectionIndices { change(&shapes[index]) }
+        for index in selectionIndices {
+            change(&shapes[index])
+            // Width changes the font size, so the text box must be re-measured.
+            if shapes[index].tool == .text { recomputeTextSize(&shapes[index]) }
+        }
     }
 
     // MARK: Debug

@@ -199,34 +199,44 @@ enum AnnotationRender {
         }
     }
 
-    /// A speech-bubble callout: a filled rounded rect with the text inside, an
-    /// optional tail toward `points[1]`, and a blinking caret while editing.
+    /// A speech-bubble callout: a filled rounded rect (with a tail toward
+    /// `points[1]` in any direction) and centered text, plus a blinking caret
+    /// while editing.
     static func drawText(_ shape: DrawnShape, editing: Bool, caretVisible: Bool,
                          in context: inout GraphicsContext) {
         guard let origin = shape.points.first else { return }
         let bubble = shape.textBubbleRect
         let fill = shape.color
         let textColor = Color.contrastingText(onHex: shape.colorHex)
+        let radius = min(bubble.height / 2, max(14, shape.fontSize * 0.42))
 
-        if shape.points.count >= 2 {
-            drawCalloutTail(from: bubble, to: shape.points[1], color: fill, in: &context)
+        // Bubble + tail as one solid shape, with a soft drop shadow for depth.
+        var solid = Path(roundedRect: bubble, cornerRadius: radius)
+        if shape.points.count >= 2,
+           let tail = calloutTailPath(from: bubble, to: shape.points[1],
+                                      baseHalf: max(9, shape.fontSize * 0.42)) {
+            solid.addPath(tail)
         }
-        context.fill(Path(roundedRect: bubble, cornerRadius: 12), with: .color(fill))
+        context.drawLayer { layer in
+            layer.addFilter(.shadow(color: .black.opacity(0.3), radius: 9, x: 0, y: 3))
+            layer.fill(solid, with: .color(fill))
+        }
 
-        // Draw line-by-line at the same metrics the model measured with, so the
-        // caret lands exactly at the text's end.
-        let font = Font.system(size: shape.fontSize, weight: .semibold)
+        // Text, centered horizontally, line by line at the measured metrics so
+        // the caret lands exactly at the end of the last line.
+        let font = Font.system(size: shape.fontSize, weight: .semibold, design: .rounded)
         let lineHeight = AnnotationText.lineHeight(size: shape.fontSize)
         let lines = shape.text.isEmpty ? [""] : shape.text.components(separatedBy: "\n")
         for (index, line) in lines.enumerated() where !line.isEmpty {
-            let y = origin.y + CGFloat(index) * lineHeight
             context.draw(Text(line).font(font).foregroundColor(textColor),
-                         at: CGPoint(x: origin.x, y: y), anchor: .topLeading)
+                         at: CGPoint(x: bubble.midX, y: origin.y + CGFloat(index) * lineHeight),
+                         anchor: .top)
         }
 
         if editing && caretVisible {
             let lastIndex = lines.count - 1
-            let caretX = origin.x + AnnotationText.lineWidth(lines[lastIndex], size: shape.fontSize)
+            let w = AnnotationText.lineWidth(lines[lastIndex], size: shape.fontSize)
+            let caretX = bubble.midX + w / 2 + 1
             let caretY = origin.y + CGFloat(lastIndex) * lineHeight
             var caret = Path()
             caret.move(to: CGPoint(x: caretX, y: caretY + 2))
@@ -235,23 +245,38 @@ enum AnnotationRender {
         }
     }
 
-    /// A triangular tail from the bubble's top or bottom edge toward `tip`
-    /// (only when the tip is clearly above/below the bubble).
-    private static func drawCalloutTail(from bubble: CGRect, to tip: CGPoint,
-                                        color: Color, in context: inout GraphicsContext) {
-        let pointsDown = tip.y > bubble.maxY
-        let pointsUp = tip.y < bubble.minY
-        guard pointsDown || pointsUp else { return }
+    /// Triangular tail from the bubble edge to `tip`, in any direction. Returns
+    /// nil when the tip is inside the bubble (no tail to draw). The base sits on
+    /// whichever edge the bubble-center→tip ray exits.
+    private static func calloutTailPath(from bubble: CGRect, to tip: CGPoint,
+                                        baseHalf: CGFloat) -> Path? {
+        guard !bubble.insetBy(dx: -1, dy: -1).contains(tip) else { return nil }
+        let center = CGPoint(x: bubble.midX, y: bubble.midY)
+        let dx = tip.x - center.x, dy = tip.y - center.y
+        guard dx != 0 || dy != 0 else { return nil }
 
-        let baseY = pointsDown ? bubble.maxY : bubble.minY
-        let half: CGFloat = 11
-        let cx = min(max(tip.x, bubble.minX + half + 4), bubble.maxX - half - 4)
-        var tail = Path()
-        tail.move(to: CGPoint(x: cx - half, y: baseY))
-        tail.addLine(to: CGPoint(x: cx + half, y: baseY))
-        tail.addLine(to: tip)
-        tail.closeSubpath()
-        context.fill(tail, with: .color(color))
+        let big = CGFloat.greatestFiniteMagnitude
+        let sx = dx == 0 ? big : ((dx > 0 ? bubble.maxX : bubble.minX) - center.x) / dx
+        let sy = dy == 0 ? big : ((dy > 0 ? bubble.maxY : bubble.minY) - center.y) / dy
+        let scale = min(sx, sy)
+        let base = CGPoint(x: center.x + dx * scale, y: center.y + dy * scale)
+
+        var p1: CGPoint, p2: CGPoint
+        if sx < sy {   // exits a left/right edge → base runs vertically
+            let y = min(max(base.y, bubble.minY + baseHalf), bubble.maxY - baseHalf)
+            p1 = CGPoint(x: base.x, y: y - baseHalf)
+            p2 = CGPoint(x: base.x, y: y + baseHalf)
+        } else {       // exits a top/bottom edge → base runs horizontally
+            let x = min(max(base.x, bubble.minX + baseHalf), bubble.maxX - baseHalf)
+            p1 = CGPoint(x: x - baseHalf, y: base.y)
+            p2 = CGPoint(x: x + baseHalf, y: base.y)
+        }
+        var path = Path()
+        path.move(to: p1)
+        path.addLine(to: tip)
+        path.addLine(to: p2)
+        path.closeSubpath()
+        return path
     }
 
     /// Dims the whole canvas, punching a clear hole for each spotlight ellipse.

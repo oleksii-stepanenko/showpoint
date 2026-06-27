@@ -116,6 +116,8 @@ final class AnnotationKeyInterceptor {
         switch keyCode {
         case 53:                              // Esc — commit (handled by onEscape)
             DispatchQueue.main.async { [weak self] in self?.onEscape?() }
+        case 48:                              // Tab — cycle color (exception: not text)
+            DispatchQueue.main.async { [weak self] in self?.onCycleColor?() }
         case 51, 117:                         // Backspace / Forward-Delete
             DispatchQueue.main.async { [weak self] in self?.onTextBackspace?() }
         case 36, 76:                          // Return / keypad Enter — newline
