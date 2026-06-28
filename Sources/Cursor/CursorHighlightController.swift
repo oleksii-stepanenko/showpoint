@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import SwiftUI
 import Combine
 
@@ -14,6 +15,12 @@ final class CursorScreenOverlay {
     private let hostView: CursorHostView
     private let settings: SettingsStore
     private var displayLink: CADisplayLink?
+
+    /// Spotlight-dim state, driven by the controller's Ctrl+scroll monitor.
+    /// `dimRadius` is the clear-circle radius in points; the controller shares one
+    /// accumulator across screens so resizing carries between displays.
+    private var dimActive = false
+    private var dimRadius: CGFloat = 220
 
     init(screen: NSScreen, settings: SettingsStore) {
         self.screen = screen
@@ -53,11 +60,39 @@ final class CursorScreenOverlay {
 
     @objc private func tick() {
         let location = NSEvent.mouseLocation
-        if NSPointInRect(location, screen.frame) {
-            hostView.showHalo(at: CGPoint(x: location.x - screen.frame.minX,
-                                          y: location.y - screen.frame.minY))
+        let onThisScreen = NSPointInRect(location, screen.frame)
+        let point = CGPoint(x: location.x - screen.frame.minX,
+                            y: location.y - screen.frame.minY)
+
+        if onThisScreen {
+            hostView.showHalo(at: point)
         } else {
             hostView.hideHalo()
+        }
+
+        updateDim(point: point, onThisScreen: onThisScreen)
+    }
+
+    /// Called by the controller when a Ctrl+scroll arrives.
+    func activateDim(radius: CGFloat) {
+        dimRadius = radius
+        dimActive = true
+    }
+
+    /// The spotlight lives only while Control stays held; releasing it fades the
+    /// dim out. Opacity is read live so the settings slider previews immediately.
+    private func updateDim(point: CGPoint, onThisScreen: Bool) {
+        guard dimActive else { return }
+        guard NSEvent.modifierFlags.contains(.control) else {
+            dimActive = false
+            hostView.hideDim()
+            return
+        }
+        let opacity = CGFloat(settings.dimSpotlightOpacity)
+        if onThisScreen {
+            hostView.showDim(at: point, radius: dimRadius, opacity: opacity)
+        } else {
+            hostView.showFullDim(opacity: opacity)
         }
     }
 
@@ -80,8 +115,21 @@ final class CursorHighlightController: ObservableObject {
     private let settings: SettingsStore
     private var overlays: [CursorScreenOverlay] = []
     private var clickMonitor: Any?
+    private var scrollMonitor: Any?
     private var screenObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
+
+    /// Consuming tap that stops the content underneath from scrolling while you
+    /// resize the spotlight. Installed only when Accessibility is granted; until
+    /// then the non-consuming `scrollMonitor` below handles resize instead.
+    private var scrollTap: ScrollSpotlightTap?
+
+    /// Shared clear-circle radius (points) for the Ctrl+scroll spotlight, carried
+    /// across displays and resize gestures. Clamped to a sane on-screen range.
+    private var dimRadius: CGFloat = 220
+    private static let dimRadiusRange: ClosedRange<CGFloat> = 60...1400
+    /// Points of radius change per unit of scroll delta.
+    private static let dimRadiusPerScroll: CGFloat = 9
 
     init(settings: SettingsStore) {
         self.settings = settings
@@ -96,6 +144,24 @@ final class CursorHighlightController: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in self?.handleClick() }
         }
+
+        // Ctrl+scroll spotlight. The global monitor needs no Accessibility, so it
+        // keeps the feature working permission-free — but it's listen-only, so the
+        // content underneath also scrolls. When Accessibility is available we also
+        // install a consuming tap (below) that swallows Ctrl+scroll; the monitor
+        // then steps aside via `scrollTap` to avoid resizing twice.
+        scrollMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.scrollWheel]
+        ) { [weak self] event in
+            let delta = event.scrollingDeltaY
+            let control = event.modifierFlags.contains(.control)
+            Task { @MainActor in
+                guard let self, self.scrollTap?.isInstalled != true else { return }
+                self.handleScroll(deltaY: delta, control: control)
+            }
+        }
+
+        installScrollTapIfPossible()
 
         // Re-render the halo when any cursor setting changes.
         settings.objectWillChange
@@ -120,6 +186,10 @@ final class CursorHighlightController: ObservableObject {
         overlays.removeAll()
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         clickMonitor = nil
+        if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
+        scrollMonitor = nil
+        scrollTap?.uninstall()
+        scrollTap = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
         cancellables.removeAll()
@@ -135,5 +205,39 @@ final class CursorHighlightController: ObservableObject {
     private func handleClick() {
         guard settings.cursorClickRipple else { return }
         overlays.forEach { $0.emitRippleIfCursorHere() }
+    }
+
+    /// Holding Control while scrolling activates the spotlight and resizes its
+    /// clear circle (scroll up grows, down shrinks). Gated on the feature toggle —
+    /// it's already implicitly gated on the highlight being on, since this monitor
+    /// only exists while the controller is running.
+    private func handleScroll(deltaY: CGFloat, control: Bool) {
+        guard control, settings.dimSpotlightEnabled, deltaY != 0 else { return }
+        dimRadius = min(max(dimRadius + deltaY * Self.dimRadiusPerScroll,
+                            Self.dimRadiusRange.lowerBound),
+                        Self.dimRadiusRange.upperBound)
+        overlays.forEach { $0.activateDim(radius: dimRadius) }
+    }
+
+    /// Installs the consuming Ctrl+scroll tap if Accessibility is granted (so the
+    /// content underneath stops scrolling while you resize). Safe to call repeatedly
+    /// — the `AppEnvironment` permission watcher retries this once permission lands.
+    func installScrollTapIfPossible() {
+        guard scrollTap == nil, AXIsProcessTrusted() else { return }
+        let tap = ScrollSpotlightTap { [weak self] delta in
+            // The tap fires on the main thread; hop to the main actor to mutate
+            // overlay state. Control is implied — the tap only reports Ctrl+scroll.
+            Task { @MainActor in self?.handleScroll(deltaY: delta, control: true) }
+        }
+        tap.isEnabled = settings.dimSpotlightEnabled
+        tap.install()
+        guard tap.isInstalled else { return }   // tapCreate can still fail
+        scrollTap = tap
+
+        // Keep the tap's consume decision in sync with the feature toggle so it
+        // passes Ctrl+scroll through untouched when the spotlight is turned off.
+        settings.$dimSpotlightEnabled
+            .sink { [weak self] enabled in self?.scrollTap?.isEnabled = enabled }
+            .store(in: &cancellables)
     }
 }

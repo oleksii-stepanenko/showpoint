@@ -13,10 +13,25 @@ final class CursorHostView: NSView {
     private let haloLayer = CALayer()
     private var showHaloAllowed = true
 
+    /// Full-screen radial gradient that dims everything except a soft circle near
+    /// the cursor (the Ctrl+scroll "spotlight"). Sits beneath the halo so the halo
+    /// still reads over the bright core. Hidden until the spotlight is active.
+    private let dimLayer = CAGradientLayer()
+    /// Fraction of the spotlight radius that stays fully clear before the feather
+    /// begins. The remaining 1 − coreFraction fades from clear to full dim.
+    private static let coreFraction: CGFloat = 0.6
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.masksToBounds = false
+
+        dimLayer.type = .radial
+        dimLayer.frame = bounds
+        dimLayer.isHidden = true
+        dimLayer.needsDisplayOnBoundsChange = true
+        layer?.addSublayer(dimLayer)
+
         haloLayer.masksToBounds = false
         haloLayer.isHidden = true
         haloLayer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
@@ -59,6 +74,69 @@ final class CursorHostView: NSView {
         CATransaction.setDisableActions(true)
         haloLayer.isHidden = true
         CATransaction.commit()
+    }
+
+    // MARK: Spotlight dim (Ctrl+scroll)
+
+    /// Dims the whole screen, leaving a soft circular hole of radius `radius`
+    /// (points) centered on `point`. The hole is a radial gradient: clear out to
+    /// `coreFraction` of the radius, then a feather to full dim. The `endPoint` is
+    /// aspect-compensated so the hole stays a true circle on non-square screens,
+    /// and everything past the radius clamps to the last (dim) color.
+    func showDim(at point: CGPoint, radius: CGFloat, opacity: CGFloat) {
+        let w = bounds.width, h = bounds.height
+        guard w > 0, h > 0, radius > 0 else { return }
+
+        let dim = NSColor.black.withAlphaComponent(opacity).cgColor
+        let clear = NSColor.black.withAlphaComponent(0).cgColor
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        dimLayer.removeAnimation(forKey: "fadeOut")
+        dimLayer.frame = bounds
+        dimLayer.isHidden = false
+        dimLayer.opacity = 1
+        dimLayer.colors = [clear, clear, dim]
+        dimLayer.locations = [0, NSNumber(value: Double(Self.coreFraction)), 1]
+        dimLayer.startPoint = CGPoint(x: point.x / w, y: point.y / h)
+        dimLayer.endPoint = CGPoint(x: (point.x + radius) / w, y: (point.y + radius) / h)
+        CATransaction.commit()
+    }
+
+    /// Fully dims the screen with no hole — used on displays that don't currently
+    /// hold the cursor while the spotlight is active elsewhere.
+    func showFullDim(opacity: CGFloat) {
+        let dim = NSColor.black.withAlphaComponent(opacity).cgColor
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        dimLayer.removeAnimation(forKey: "fadeOut")
+        dimLayer.frame = bounds
+        dimLayer.isHidden = false
+        dimLayer.opacity = 1
+        dimLayer.colors = [dim, dim]
+        dimLayer.locations = [0, 1]
+        CATransaction.commit()
+    }
+
+    /// Fades the dim out, then hides it. Idempotent.
+    func hideDim() {
+        guard !dimLayer.isHidden, dimLayer.animation(forKey: "fadeOut") == nil else { return }
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = dimLayer.presentation()?.opacity ?? 1
+        fade.toValue = 0
+        fade.duration = 0.18
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        fade.isRemovedOnCompletion = false
+        fade.fillMode = .forwards
+        dimLayer.add(fade, forKey: "fadeOut")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) { [weak self] in
+            guard let self else { return }
+            // A new showDim may have re-armed the spotlight during the fade.
+            guard self.dimLayer.animation(forKey: "fadeOut") != nil else { return }
+            self.dimLayer.isHidden = true
+            self.dimLayer.removeAnimation(forKey: "fadeOut")
+            self.dimLayer.opacity = 1
+        }
     }
 
     // MARK: Click ripple

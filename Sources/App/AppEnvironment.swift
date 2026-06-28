@@ -139,6 +139,11 @@ final class AppEnvironment: ObservableObject {
             if settings.keystrokesEnabled && !keystrokes.isRunning {
                 keystrokes.start()
             }
+            // If the cursor highlight is on, arm the consuming Ctrl+scroll tap so
+            // the content underneath stops scrolling while resizing the spotlight.
+            if settings.cursorHighlightEnabled {
+                cursorHighlight.installScrollTapIfPossible()
+            }
             // If annotation is already showing, bring its keyboard to life now.
             annotation.reinstallKeyboardIfNeeded()
         }

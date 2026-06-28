@@ -166,6 +166,21 @@ private struct CursorSettingsView: View {
                 Toggle("Show ripple on click", isOn: $settings.cursorClickRipple)
                 Toggle("Show only while clicking", isOn: $settings.cursorOnlyOnClick)
             }
+
+            Section {
+                Toggle("Ctrl + scroll to dim", isOn: $settings.dimSpotlightEnabled)
+                LabeledContent("Dim opacity") {
+                    Slider(value: $settings.dimSpotlightOpacity, in: 0.1...0.95)
+                    Text("\(Int(settings.dimSpotlightOpacity * 100))%")
+                        .monospacedDigit().foregroundStyle(.secondary)
+                }
+                .disabled(!settings.dimSpotlightEnabled)
+            } header: {
+                Text("Spotlight dim")
+            } footer: {
+                Text("Hold Control and scroll to dim the screen, keeping a clear circle around the pointer. Scroll up/down to resize it; release Control to clear. Requires the cursor highlight to be on. With Accessibility granted, the content underneath stays put while you resize.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

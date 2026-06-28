@@ -43,6 +43,10 @@ on their own, and **passwords are never captured** (macOS secure input blocks it
 A smooth halo follows your pointer across every display, with a pulse on each click.
 Choose a **disc, ring, squircle, or rhombus**, your color, size, and opacity.
 
+**Hold ⌃ Control and scroll** to dim the screen down to a soft spotlight around the
+pointer — scroll up/down to resize the clear circle, release Control to clear. Set the
+dim opacity in **Settings → Cursor**.
+
 ### ✏️ Annotate the screen
 
 <img src="docs/assets/annotate.png" width="680" alt="Screen annotation" />

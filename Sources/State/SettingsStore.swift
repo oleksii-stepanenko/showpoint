@@ -62,6 +62,10 @@ final class SettingsStore: ObservableObject {
     @Published var cursorClickRipple: Bool       { didSet { defaults.set(cursorClickRipple, forKey: Key.cursorClickRipple) } }
     @Published var cursorOnlyOnClick: Bool       { didSet { defaults.set(cursorOnlyOnClick, forKey: Key.cursorOnlyOnClick) } }
 
+    // MARK: Spotlight dim (Ctrl+scroll)
+    @Published var dimSpotlightEnabled: Bool     { didSet { defaults.set(dimSpotlightEnabled, forKey: Key.dimEnabled) } }
+    @Published var dimSpotlightOpacity: Double   { didSet { defaults.set(dimSpotlightOpacity, forKey: Key.dimOpacity) } }
+
     // MARK: Annotation
     @Published var annotationEnabled: Bool       { didSet { defaults.set(annotationEnabled, forKey: Key.annEnabled) } }
     @Published var annotationColorHex: String    { didSet { defaults.set(annotationColorHex, forKey: Key.annColorHex) } }
@@ -87,6 +91,8 @@ final class SettingsStore: ObservableObject {
             Key.cursorShape: CursorShape.disc.rawValue,
             Key.cursorClickRipple: true,
             Key.cursorOnlyOnClick: false,
+            Key.dimEnabled: true,
+            Key.dimOpacity: 0.6,
             Key.annColorHex: "#FF3B30",
             Key.annLineWidth: 4.0,
             Key.annTool: AnnotationTool.pen.rawValue,
@@ -111,6 +117,8 @@ final class SettingsStore: ObservableObject {
         cursorShape       = CursorShape(rawValue: defaults.string(forKey: Key.cursorShape) ?? "") ?? .disc
         cursorClickRipple = defaults.bool(forKey: Key.cursorClickRipple)
         cursorOnlyOnClick = defaults.bool(forKey: Key.cursorOnlyOnClick)
+        dimSpotlightEnabled = defaults.bool(forKey: Key.dimEnabled)
+        dimSpotlightOpacity = defaults.double(forKey: Key.dimOpacity)
 
         annotationEnabled   = defaults.bool(forKey: Key.annEnabled)
         annotationColorHex  = defaults.string(forKey: Key.annColorHex) ?? "#FF3B30"
@@ -136,6 +144,8 @@ final class SettingsStore: ObservableObject {
         static let cursorShape       = "cursor.shape"
         static let cursorClickRipple = "cursor.clickRipple"
         static let cursorOnlyOnClick = "cursor.onlyOnClick"
+        static let dimEnabled        = "cursor.dimSpotlight.enabled"
+        static let dimOpacity        = "cursor.dimSpotlight.opacity"
         static let annEnabled        = "ann.enabled"
         static let annColorHex       = "ann.colorHex"
         static let annLineWidth      = "ann.lineWidth"
